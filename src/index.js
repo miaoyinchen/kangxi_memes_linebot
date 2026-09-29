@@ -1,6 +1,5 @@
 export default {
   async fetch(request, env, ctx) {
-    // 只接受 POST（LINE Webhook 會用 POST）
     if (request.method !== "POST") {
       return new Response("OK");
     }
@@ -8,7 +7,7 @@ export default {
     const bodyText = await request.text();
     const signature = request.headers.get("x-line-signature");
 
-    // 驗證簽名（重要，防止偽造請求）
+    // 驗證簽名
     const isValid = await verifySignature(bodyText, signature, env.LINE_CHANNEL_SECRET);
     if (!isValid) {
       return new Response("Invalid signature", { status: 401 });
@@ -16,39 +15,68 @@ export default {
 
     const body = JSON.parse(bodyText);
 
-    // 處理每一個事件
     if (body.events && body.events.length > 0) {
       for (const event of body.events) {
         if (event.type === "message" && event.message.type === "text") {
-          const keyword = event.message.text.trim();
+          const userInput = event.message.text.trim();
           const replyToken = event.replyToken;
 
-          // 查詢資料庫
-          const result = await env.DB.prepare(
-            "SELECT image_url, description FROM memes WHERE keyword = ? LIMIT 1"
-          ).bind(keyword).first();
+          // 判斷使用者輸入的是「純數字 id」還是「關鍵字」
+          const isId = /^\d+$/.test(userInput);
 
-          if (result) {
-            // 找到梗圖 → 回傳圖片 + 文字
-            await replyMessage(replyToken, [
-              {
-                type: "image",
-                originalContentUrl: result.image_url,
-                previewImageUrl: result.image_url
-              },
-              {
-                type: "text",
-                text: result.description || "這是相關梗圖"
-              }
-            ], env.LINE_CHANNEL_ACCESS_TOKEN);
+          if (isId) {
+            // ===== 任務二：直接用 id 查詢 =====
+            const result = await env.DB.prepare(
+              "SELECT image_url FROM memes WHERE id = ?"
+            ).bind(userInput).first();
+
+            if (result) {
+              // 找到 → 只傳圖片
+              await replyMessage(replyToken, [
+                {
+                  type: "image",
+                  originalContentUrl: result.image_url,
+                  previewImageUrl: result.image_url
+                }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else {
+              // 找不到
+              await replyMessage(replyToken, [
+                { type: "text", text: "沒有這張圖片" }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            }
           } else {
-            // 找不到
-            await replyMessage(replyToken, [
-              {
-                type: "text",
-                text: `找不到「${keyword}」相關的梗圖喔～`
-              }
-            ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            // ===== 任務一：用關鍵字查詢 =====
+            const results = await env.DB.prepare(
+              "SELECT id, keyword, image_url FROM memes WHERE keyword = ?"
+            ).bind(userInput).all();
+
+            const rows = results.results || [];
+
+            if (rows.length === 0) {
+              // 沒有符合
+              await replyMessage(replyToken, [
+                { type: "text", text: "沒有這張圖片" }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else if (rows.length === 1) {
+              // 只有一張 → 直接傳圖片
+              await replyMessage(replyToken, [
+                {
+                  type: "image",
+                  originalContentUrl: rows[0].image_url,
+                  previewImageUrl: rows[0].image_url
+                }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else {
+              // 多張符合 → 回傳列表讓使用者選
+              const listText = rows
+                .map(row => `【${row.id}】${row.keyword}`)
+                .join("\n");
+
+              await replyMessage(replyToken, [
+                { type: "text", text: listText }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            }
           }
         }
       }
