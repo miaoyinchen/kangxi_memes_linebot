@@ -53,15 +53,44 @@ export default {
 2. 直接輸入數字 id
    → 立即傳對應圖片
 
-3. 點擊下方「抽」
+3. 輸入 @藝人名字（例如 @沈玉琳）
+   → 列出該藝人相關的梗圖列表
+
+4. 點擊下方「抽」
    → 隨機傳一張梗圖
 
-4. 點擊下方「指令說明」
+5. 點擊下方「指令說明」
    → 再次查看本說明`;
 
             await replyMessage(replyToken, [
               { type: "text", text: helpText }
             ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            continue;
+          }
+
+          // ===== 新增功能：@藝人搜尋 =====
+          if (userInput.startsWith("@") && userInput.length > 1) {
+            const artistName = userInput.slice(1).trim(); // 去掉 @ 符號
+
+            const results = await env.DB.prepare(
+              "SELECT id, keyword FROM memes WHERE artist LIKE ?"
+            ).bind(`%${artistName}%`).all();
+
+            const rows = results.results || [];
+
+            if (rows.length === 0) {
+              await replyMessage(replyToken, [
+                { type: "text", text: "沒有找到這個藝人的梗圖" }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else {
+              const listText = rows
+                .map(row => `【${row.id}】${row.keyword}`)
+                .join("\n");
+
+              await replyMessage(replyToken, [
+                { type: "text", text: listText }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            }
             continue;
           }
 
@@ -142,9 +171,7 @@ async function verifySignature(body, signature, channelSecret) {
 
 // 回覆訊息（每次都附上 Quick Reply）
 async function replyMessage(replyToken, messages, accessToken) {
-  // 為每一則訊息加上 quickReply
   const messagesWithQuickReply = messages.map(msg => {
-    // 只在文字訊息或最後一則訊息加上 Quick Reply（LINE 建議）
     return {
       ...msg,
       quickReply: {
