@@ -21,17 +21,16 @@ export default {
           const userInput = event.message.text.trim();
           const replyToken = event.replyToken;
 
-          // 判斷使用者輸入的是「純數字 id」還是「關鍵字」
+          // 判斷是否為純數字 id
           const isId = /^\d+$/.test(userInput);
 
           if (isId) {
-            // ===== 任務二：直接用 id 查詢 =====
+            // ===== 用 id 精確查詢 =====
             const result = await env.DB.prepare(
               "SELECT image_url FROM memes WHERE id = ?"
             ).bind(userInput).first();
 
             if (result) {
-              // 找到 → 只傳圖片
               await replyMessage(replyToken, [
                 {
                   type: "image",
@@ -40,79 +39,10 @@ export default {
                 }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
-              // 找不到
               await replyMessage(replyToken, [
                 { type: "text", text: "沒有這張圖片" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             }
           } else {
-            // ===== 任務一：用關鍵字查詢 =====
-            const results = await env.DB.prepare(
-              "SELECT id, keyword, image_url FROM memes WHERE keyword = ?"
-            ).bind(userInput).all();
-
-            const rows = results.results || [];
-
-            if (rows.length === 0) {
-              // 沒有符合
-              await replyMessage(replyToken, [
-                { type: "text", text: "沒有這張圖片" }
-              ], env.LINE_CHANNEL_ACCESS_TOKEN);
-            } else if (rows.length === 1) {
-              // 只有一張 → 直接傳圖片
-              await replyMessage(replyToken, [
-                {
-                  type: "image",
-                  originalContentUrl: rows[0].image_url,
-                  previewImageUrl: rows[0].image_url
-                }
-              ], env.LINE_CHANNEL_ACCESS_TOKEN);
-            } else {
-              // 多張符合 → 回傳列表讓使用者選
-              const listText = rows
-                .map(row => `【${row.id}】${row.keyword}`)
-                .join("\n");
-
-              await replyMessage(replyToken, [
-                { type: "text", text: listText }
-              ], env.LINE_CHANNEL_ACCESS_TOKEN);
-            }
-          }
-        }
-      }
-    }
-
-    return new Response("OK");
-  }
-};
-
-// 驗證 LINE 簽名
-async function verifySignature(body, signature, channelSecret) {
-  if (!signature || !channelSecret) return false;
-  const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(channelSecret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(body));
-  const expected = btoa(String.fromCharCode(...new Uint8Array(sig)));
-  return expected === signature;
-}
-
-// 回覆訊息給 LINE
-async function replyMessage(replyToken, messages, accessToken) {
-  await fetch("https://api.line.me/v2/bot/message/reply", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`
-    },
-    body: JSON.stringify({
-      replyToken: replyToken,
-      messages: messages
-    })
-  });
-}
+            // ===== 關鍵字部分符合查詢（LIKE %關鍵字%） =====
+            const results = await 
