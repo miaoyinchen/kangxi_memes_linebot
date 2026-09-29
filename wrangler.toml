@@ -1,3 +1,7 @@
-name = "line-meme-bot"
+name = "kangxi-memes-linebot"
 main = "src/index.js"
 compatibility_date = "2026-09-28"
+
+[[d1_databases]]
+binding = "DB"
+database_id = "3f82870d-7942-4566-b6b7-367513168137"
