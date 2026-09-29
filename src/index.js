@@ -7,7 +7,6 @@ export default {
     const bodyText = await request.text();
     const signature = request.headers.get("x-line-signature");
 
-    // 驗證簽名
     const isValid = await verifySignature(bodyText, signature, env.LINE_CHANNEL_SECRET);
     if (!isValid) {
       return new Response("Invalid signature", { status: 401 });
@@ -21,11 +20,55 @@ export default {
           const userInput = event.message.text.trim();
           const replyToken = event.replyToken;
 
-          // 判斷是否為純數字 id
+          // ===== 特殊指令：抽 =====
+          if (userInput === "抽") {
+            const result = await env.DB.prepare(
+              "SELECT image_url FROM memes ORDER BY RANDOM() LIMIT 1"
+            ).first();
+
+            if (result) {
+              await replyMessage(replyToken, [
+                {
+                  type: "image",
+                  originalContentUrl: result.image_url,
+                  previewImageUrl: result.image_url
+                }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else {
+              await replyMessage(replyToken, [
+                { type: "text", text: "資料庫目前沒有圖片" }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            }
+            continue;
+          }
+
+          // ===== 特殊指令：指令說明 =====
+          if (userInput === "指令說明") {
+            const helpText = `【康熙梗圖機器人使用說明】
+
+1. 直接輸入關鍵字（支援部分符合）
+   → 找到 1 張：直接傳圖片
+   → 找到多張：回傳列表，再輸入 id 選擇
+
+2. 直接輸入數字 id
+   → 立即傳對應圖片
+
+3. 點擊下方「抽」
+   → 隨機傳一張梗圖
+
+4. 點擊下方「指令說明」
+   → 再次查看本說明`;
+
+            await replyMessage(replyToken, [
+              { type: "text", text: helpText }
+            ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            continue;
+          }
+
+          // ===== 判斷是否為純數字 id =====
           const isId = /^\d+$/.test(userInput);
 
           if (isId) {
-            // ===== 用 id 精確查詢 =====
             const result = await env.DB.prepare(
               "SELECT image_url FROM memes WHERE id = ?"
             ).bind(userInput).first();
@@ -44,7 +87,7 @@ export default {
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             }
           } else {
-            // ===== 關鍵字部分符合查詢（LIKE %關鍵字%） =====
+            // ===== 關鍵字部分符合查詢 =====
             const results = await env.DB.prepare(
               "SELECT id, keyword, image_url FROM memes WHERE keyword LIKE ?"
             ).bind(`%${userInput}%`).all();
@@ -56,7 +99,6 @@ export default {
                 { type: "text", text: "沒有這張圖片" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else if (rows.length === 1) {
-              // 只有一張 → 直接傳圖片
               await replyMessage(replyToken, [
                 {
                   type: "image",
@@ -65,7 +107,6 @@ export default {
                 }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
-              // 多張符合 → 回傳列表
               const listText = rows
                 .map(row => `【${row.id}】${row.keyword}`)
                 .join("\n");
@@ -99,8 +140,36 @@ async function verifySignature(body, signature, channelSecret) {
   return expected === signature;
 }
 
-// 回覆訊息給 LINE
+// 回覆訊息（每次都附上 Quick Reply）
 async function replyMessage(replyToken, messages, accessToken) {
+  // 為每一則訊息加上 quickReply
+  const messagesWithQuickReply = messages.map(msg => {
+    // 只在文字訊息或最後一則訊息加上 Quick Reply（LINE 建議）
+    return {
+      ...msg,
+      quickReply: {
+        items: [
+          {
+            type: "action",
+            action: {
+              type: "message",
+              label: "抽",
+              text: "抽"
+            }
+          },
+          {
+            type: "action",
+            action: {
+              type: "message",
+              label: "指令說明",
+              text: "指令說明"
+            }
+          }
+        ]
+      }
+    };
+  });
+
   await fetch("https://api.line.me/v2/bot/message/reply", {
     method: "POST",
     headers: {
@@ -109,7 +178,7 @@ async function replyMessage(replyToken, messages, accessToken) {
     },
     body: JSON.stringify({
       replyToken: replyToken,
-      messages: messages
+      messages: messagesWithQuickReply
     })
   });
 }
