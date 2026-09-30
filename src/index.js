@@ -39,25 +39,41 @@ export default {
           // ===== 特殊指令：藝人列表 =====
           if (userInput === "藝人列表") {
             const results = await env.DB.prepare(`
-              SELECT artist, COUNT(*) as count 
+              SELECT artist 
               FROM memes 
-              WHERE artist IS NOT NULL AND artist != '' 
-              GROUP BY artist 
-              ORDER BY count DESC
+              WHERE artist IS NOT NULL AND artist != ''
             `).all();
-
+          
             const rows = results.results || [];
-
+          
             if (rows.length === 0) {
               await replyMessage(replyToken, [
                 { type: "text", text: "目前資料庫沒有藝人資料" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
+              // 用來統計每個藝人的張數
+              const artistCount = {};
+          
+              for (const row of rows) {
+                // 用空白拆開多個藝人
+                const artists = row.artist.trim().split(/\s+/);
+          
+                for (const name of artists) {
+                  if (name) {  // 避免空字串
+                    artistCount[name] = (artistCount[name] || 0) + 1;
+                  }
+                }
+              }
+          
+              // 轉成陣列並依照張數由多到少排序
+              const sorted = Object.entries(artistCount)
+                .sort((a, b) => b[1] - a[1]);
+          
               let listText = "現在資料庫有\n";
-              listText += rows
-                .map(row => `${row.artist}: ${row.count}張`)
+              listText += sorted
+                .map(([name, count]) => `${name}: ${count}張`)
                 .join("\n");
-
+          
               await replyMessage(replyToken, [
                 { type: "text", text: listText }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
