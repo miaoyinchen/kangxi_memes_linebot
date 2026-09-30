@@ -40,21 +40,15 @@ export default {
           if (userInput === "指令說明") {
             const helpText = `【康熙梗圖機器人使用說明】
 
-1. 直接輸入關鍵字（支援部分符合）
-   → 找到 1 張：直接傳圖片 + 資訊
-   → 找到多張：回傳列表，再輸入 id 選擇
+🔍 直接輸入圖片關鍵字或編號
+  關鍵字短一點 成功率比較高喔
 
-2. 直接輸入數字 id
-   → 立即傳對應圖片 + 資訊
-
-3. 輸入 @藝人名字（例如 @沈玉琳）
-   → 列出該藝人相關的梗圖列表
-
-4. 點擊下方「抽」
-   → 隨機傳一張梗圖 + 資訊
-
-5. 點擊下方「指令說明」
-   → 再次查看本說明`;
+📺 輸入 @藝人名字
+  例如 @蔡康永
+  → 列出有關該藝人的梗圖列表
+  一定要加@ 才會觸發藝人的搜尋
+  否則只會搜尋圖片名稱而已
+  *不是每張圖片都有對應的藝人`;
 
             await replyMessage(replyToken, [
               { type: "text", text: helpText }
@@ -74,7 +68,7 @@ export default {
 
             if (rows.length === 0) {
               await replyMessage(replyToken, [
-                { type: "text", text: "沒有找到這個藝人的梗圖" }
+                { type: "text", text: "沒有找到這個藝人的圖片" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
               const listText = rows
@@ -100,7 +94,7 @@ export default {
               await sendImageWithInfo(replyToken, result, env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
               await replyMessage(replyToken, [
-                { type: "text", text: "沒有這張圖片" }
+                { type: "text", text: "沒找到欸...換換其他關鍵字或編號" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             }
           } else {
@@ -113,7 +107,7 @@ export default {
 
             if (rows.length === 0) {
               await replyMessage(replyToken, [
-                { type: "text", text: "沒有這張圖片" }
+                { type: "text", text: "沒找到欸...換換其他關鍵字或編號" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else if (rows.length === 1) {
               await sendImageWithInfo(replyToken, rows[0], env.LINE_CHANNEL_ACCESS_TOKEN);
@@ -139,8 +133,8 @@ export default {
 async function sendImageWithInfo(replyToken, data, accessToken) {
   const artistText = data.artist ? data.artist : "無資料";
 
-  const infoText = `圖片名稱:${data.keyword}
-藝人:${artistText}`;
+  const infoText = `圖片名稱: ${data.keyword}
+藝人: ${artistText}`;
 
   await replyMessage(replyToken, [
     {
