@@ -36,6 +36,35 @@ export default {
             continue;
           }
 
+          // ===== 特殊指令：藝人列表 =====
+          if (userInput === "藝人列表") {
+            const results = await env.DB.prepare(`
+              SELECT artist, COUNT(*) as count 
+              FROM memes 
+              WHERE artist IS NOT NULL AND artist != '' 
+              GROUP BY artist 
+              ORDER BY count DESC
+            `).all();
+
+            const rows = results.results || [];
+
+            if (rows.length === 0) {
+              await replyMessage(replyToken, [
+                { type: "text", text: "目前資料庫沒有藝人資料" }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else {
+              let listText = "現在資料庫有\n";
+              listText += rows
+                .map(row => `${row.artist}: ${row.count}張`)
+                .join("\n");
+
+              await replyMessage(replyToken, [
+                { type: "text", text: listText }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            }
+            continue;
+          }
+
           // ===== 特殊指令：指令說明 =====
           if (userInput === "指令說明") {
             const helpText = `【康熙梗圖機器人使用說明】
@@ -178,6 +207,14 @@ async function replyMessage(replyToken, messages, accessToken) {
               type: "message",
               label: "抽",
               text: "抽"
+            }
+          },
+          {
+            type: "action",
+            action: {
+              type: "message",
+              label: "藝人列表",
+              text: "藝人列表"
             }
           },
           {
