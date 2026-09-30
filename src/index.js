@@ -23,17 +23,11 @@ export default {
           // ===== 特殊指令：抽 =====
           if (userInput === "抽") {
             const result = await env.DB.prepare(
-              "SELECT image_url FROM memes ORDER BY RANDOM() LIMIT 1"
+              "SELECT keyword, artist, image_url FROM memes ORDER BY RANDOM() LIMIT 1"
             ).first();
 
             if (result) {
-              await replyMessage(replyToken, [
-                {
-                  type: "image",
-                  originalContentUrl: result.image_url,
-                  previewImageUrl: result.image_url
-                }
-              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+              await sendImageWithInfo(replyToken, result, env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
               await replyMessage(replyToken, [
                 { type: "text", text: "資料庫目前沒有圖片" }
@@ -47,17 +41,17 @@ export default {
             const helpText = `【康熙梗圖機器人使用說明】
 
 1. 直接輸入關鍵字（支援部分符合）
-   → 找到 1 張：直接傳圖片
+   → 找到 1 張：直接傳圖片 + 資訊
    → 找到多張：回傳列表，再輸入 id 選擇
 
 2. 直接輸入數字 id
-   → 立即傳對應圖片
+   → 立即傳對應圖片 + 資訊
 
 3. 輸入 @藝人名字（例如 @沈玉琳）
    → 列出該藝人相關的梗圖列表
 
 4. 點擊下方「抽」
-   → 隨機傳一張梗圖
+   → 隨機傳一張梗圖 + 資訊
 
 5. 點擊下方「指令說明」
    → 再次查看本說明`;
@@ -68,9 +62,9 @@ export default {
             continue;
           }
 
-          // ===== 新增功能：@藝人搜尋 =====
+          // ===== @藝人搜尋 =====
           if (userInput.startsWith("@") && userInput.length > 1) {
-            const artistName = userInput.slice(1).trim(); // 去掉 @ 符號
+            const artistName = userInput.slice(1).trim();
 
             const results = await env.DB.prepare(
               "SELECT id, keyword FROM memes WHERE artist LIKE ?"
@@ -99,17 +93,11 @@ export default {
 
           if (isId) {
             const result = await env.DB.prepare(
-              "SELECT image_url FROM memes WHERE id = ?"
+              "SELECT keyword, artist, image_url FROM memes WHERE id = ?"
             ).bind(userInput).first();
 
             if (result) {
-              await replyMessage(replyToken, [
-                {
-                  type: "image",
-                  originalContentUrl: result.image_url,
-                  previewImageUrl: result.image_url
-                }
-              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+              await sendImageWithInfo(replyToken, result, env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
               await replyMessage(replyToken, [
                 { type: "text", text: "沒有這張圖片" }
@@ -118,7 +106,7 @@ export default {
           } else {
             // ===== 關鍵字部分符合查詢 =====
             const results = await env.DB.prepare(
-              "SELECT id, keyword, image_url FROM memes WHERE keyword LIKE ?"
+              "SELECT id, keyword, artist, image_url FROM memes WHERE keyword LIKE ?"
             ).bind(`%${userInput}%`).all();
 
             const rows = results.results || [];
@@ -128,13 +116,7 @@ export default {
                 { type: "text", text: "沒有這張圖片" }
               ], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else if (rows.length === 1) {
-              await replyMessage(replyToken, [
-                {
-                  type: "image",
-                  originalContentUrl: rows[0].image_url,
-                  previewImageUrl: rows[0].image_url
-                }
-              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+              await sendImageWithInfo(replyToken, rows[0], env.LINE_CHANNEL_ACCESS_TOKEN);
             } else {
               const listText = rows
                 .map(row => `【${row.id}】${row.keyword}`)
@@ -152,6 +134,26 @@ export default {
     return new Response("OK");
   }
 };
+
+// 發送圖片 + 文字資訊
+async function sendImageWithInfo(replyToken, data, accessToken) {
+  const artistText = data.artist ? data.artist : "無資料";
+
+  const infoText = `圖片名稱:${data.keyword}
+藝人:${artistText}`;
+
+  await replyMessage(replyToken, [
+    {
+      type: "image",
+      originalContentUrl: data.image_url,
+      previewImageUrl: data.image_url
+    },
+    {
+      type: "text",
+      text: infoText
+    }
+  ], accessToken);
+}
 
 // 驗證 LINE 簽名
 async function verifySignature(body, signature, channelSecret) {
