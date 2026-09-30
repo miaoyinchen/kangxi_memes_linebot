@@ -73,6 +73,7 @@ export default {
               listText += sorted
                 .map(([name, count]) => `${name}: ${count}張`)
                 .join("\n");
+              listText += "\n📢藝人搜尋範例:\n@蔡康永\n一定要加 @ 才會觸發藝人搜尋喔";
           
               await replyMessage(replyToken, [
                 { type: "text", text: listText }
@@ -91,9 +92,13 @@ export default {
 📺 輸入 @藝人名字
   例如 @蔡康永
   → 列出有關該藝人的梗圖列表
-  一定要加@ 才會觸發藝人的搜尋
+  一定要加 @ 才會觸發藝人的搜尋
   否則只會搜尋圖片名稱而已
-  *不是每張圖片都有對應的藝人`;
+  藝人名字不需完整輸入
+
+🖊️英文大小寫不影響查詢
+例: @小S 和 @小s 是一樣的結果
+但 @S 會有大S和小S`;
 
             await replyMessage(replyToken, [
               { type: "text", text: helpText }
