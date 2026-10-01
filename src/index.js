@@ -14,6 +14,9 @@ export default {
 
     const body = JSON.parse(bodyText);
 
+    // === 最近更新幾筆更改處 ===
+    const RECENT_COUNT = 10;
+
     if (body.events && body.events.length > 0) {
       for (const event of body.events) {
         if (event.type === "message" && event.message.type === "text") {
@@ -81,7 +84,39 @@ export default {
             }
             continue;
           }
+          
+          // ===== 特殊指令：最近更新 =====
+          if (userInput === "最近更新") {
+            const results = await env.DB.prepare(`
+              SELECT id, keyword, artist 
+              FROM memes 
+              ORDER BY id DESC 
+              LIMIT ?
+            `).bind(RECENT_COUNT).all();
 
+            const rows = results.results || [];
+
+            if (rows.length === 0) {
+              await replyMessage(replyToken, [
+                { type: "text", text: "目前資料庫沒有資料" }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            } else {
+              let listText = "最近更新了這些!!\n";
+              listText += rows
+                .map(row => {
+                  const artistText = row.artist ? row.artist : "無資料";
+                  return `【${row.id}】${row.keyword} (${artistText})`;
+                })
+                .join("\n");
+
+              await replyMessage(replyToken, [
+                { type: "text", text: listText }
+              ], env.LINE_CHANNEL_ACCESS_TOKEN);
+            }
+            continue;
+          }
+
+          
           // ===== 特殊指令：指令說明 =====
           if (userInput === "指令說明") {
             const helpText = `【康熙梗圖機器人使用說明】
@@ -237,6 +272,14 @@ async function replyMessage(replyToken, messages, accessToken) {
               type: "message",
               label: "藝人列表",
               text: "藝人列表"
+            }
+          },
+          {
+            type: "action",
+            action: {
+              type: "message",
+              label: "最近更新",
+              text: "最近更新"
             }
           },
           {
